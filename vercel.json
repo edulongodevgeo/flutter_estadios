@@ -3,13 +3,10 @@
   "outputDirectory": "build/web",
   "installCommand": "echo 'Flutter SDK should be available in the build environment'",
   "framework": null,
-  "routes": [
+  "rewrites": [
     {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ],
   "headers": [
