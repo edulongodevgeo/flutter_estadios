@@ -10,6 +10,9 @@ class LocationModel {
   final LocationType type;
   final double rating;
   final String imageUrl;
+  final String? city;
+  final String? state;
+  final int capacity;
 
   const LocationModel({
     required this.id,
@@ -19,5 +22,8 @@ class LocationModel {
     required this.type,
     required this.rating,
     required this.imageUrl,
+    this.city,
+    this.state,
+    required this.capacity,
   });
 }

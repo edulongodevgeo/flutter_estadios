@@ -3,16 +3,22 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 
+import 'package:google_fonts/google_fonts.dart';
 // Components
 import '../widgets/top_bar.dart';
 import '../widgets/location_details_sheet.dart';
 import '../widgets/sidebar_widget.dart';
+import '../widgets/map_search_widget.dart';
+import 'dart:ui'; // For BackdropFilter
 
 // Models
 import '../models/location_model.dart';
 
 // Services
 import '../services/api_service.dart';
+
+// Screens
+import 'rankings_screen.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -30,6 +36,7 @@ class _MapScreenState extends State<MapScreen>
   List<LocationModel> _allLocations = [];
   List<LocationModel> _visibleLocations = [];
   bool _isLocating = false;
+  bool _isLoadingData = true;
 
   @override
   void initState() {
@@ -60,6 +67,9 @@ class _MapScreenState extends State<MapScreen>
           type: LocationType.stadium,
           rating: 0.0,
           imageUrl: '',
+          city: stadium.cidade,
+          state: stadium.uf,
+          capacity: stadium.capacidade,
         );
       }).toList();
 
@@ -67,9 +77,62 @@ class _MapScreenState extends State<MapScreen>
         _allLocations = stadiumLocations;
         _visibleLocations = List.from(_allLocations);
       });
+
+      // Artificial delay to show the effect
+      await Future.delayed(const Duration(seconds: 2));
     } catch (e) {
       debugPrint('Error fetching stadiums: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingData = false);
     }
+  }
+
+  void _filterStadiums(String query) {
+    if (query.isEmpty) {
+      setState(() {
+        _visibleLocations = List.from(_allLocations);
+      });
+      return;
+    }
+
+    final lowerQuery = query.toLowerCase();
+    setState(() {
+      _visibleLocations = _allLocations.where((loc) {
+        final nameMatch = loc.name.toLowerCase().contains(lowerQuery);
+        final cityMatch = loc.city?.toLowerCase().contains(lowerQuery) ?? false;
+        final stateMatch =
+            loc.state?.toLowerCase().contains(lowerQuery) ?? false;
+        return nameMatch || cityMatch || stateMatch;
+      }).toList();
+    });
+  }
+
+  void _fitAllStadiums() {
+    if (_allLocations.isEmpty) return;
+
+    // Calculate bounds from all locations
+    double minLat = _allLocations.first.coordinates.latitude;
+    double maxLat = _allLocations.first.coordinates.latitude;
+    double minLng = _allLocations.first.coordinates.longitude;
+    double maxLng = _allLocations.first.coordinates.longitude;
+
+    for (final location in _allLocations) {
+      final lat = location.coordinates.latitude;
+      final lng = location.coordinates.longitude;
+
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+    }
+
+    // Create bounds with padding
+    final bounds = LatLngBounds(LatLng(minLat, minLng), LatLng(maxLat, maxLng));
+
+    // Fit bounds to map
+    _mapController.fitCamera(
+      CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)),
+    );
   }
 
   Future<void> _moveToCurrentLocation() async {
@@ -157,6 +220,11 @@ class _MapScreenState extends State<MapScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                MapSearchWidget(
+                  onChanged: _filterStadiums,
+                  onClear: () => _filterStadiums(''),
+                ),
+                const SizedBox(height: 16),
                 _buildCircleButton(
                   Icons.my_location,
                   size: 50,
@@ -171,8 +239,69 @@ class _MapScreenState extends State<MapScreen>
             child: SidebarWidget(
               animationController: _sidebarController,
               onClose: () => _sidebarController.reverse(),
+              onHomeTap: _fitAllStadiums,
+              onRankingsTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => RankingsScreen(
+                      locations: _allLocations,
+                      onLocationTap: (location) {
+                        // Center map on selected stadium
+                        _mapController.move(location.coordinates, 15.0);
+                      },
+                    ),
+                  ),
+                );
+              },
             ),
           ),
+
+          // 7. Loading Overlay (Topmost)
+          if (_isLoadingData)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.3),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 24,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 15,
+                            offset: Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(
+                            color: Color(0xFF69F0AE),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Carregando camadas...',
+                            style: GoogleFonts.montserrat(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

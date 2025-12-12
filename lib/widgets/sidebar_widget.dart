@@ -5,11 +5,15 @@ import 'package:google_fonts/google_fonts.dart';
 class SidebarWidget extends StatelessWidget {
   final AnimationController animationController;
   final VoidCallback onClose;
+  final VoidCallback? onRankingsTap;
+  final VoidCallback? onHomeTap;
 
   const SidebarWidget({
     super.key,
     required this.animationController,
     required this.onClose,
+    this.onRankingsTap,
+    this.onHomeTap,
   });
 
   @override
@@ -88,13 +92,19 @@ class SidebarWidget extends StatelessWidget {
                                   _buildMenuItem(
                                     icon: Icons.home_rounded,
                                     title: 'Home',
-                                    onTap: onClose,
+                                    onTap: () {
+                                      onClose();
+                                      onHomeTap?.call();
+                                    },
                                     isActive: true,
                                   ),
                                   _buildMenuItem(
                                     icon: Icons.leaderboard_rounded,
                                     title: 'Rankings',
-                                    onTap: onClose,
+                                    onTap: () {
+                                      onClose();
+                                      onRankingsTap?.call();
+                                    },
                                   ),
                                   _buildMenuItem(
                                     icon: Icons.business_rounded,
