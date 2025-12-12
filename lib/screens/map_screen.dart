@@ -5,8 +5,8 @@ import 'package:geolocator/geolocator.dart';
 
 // Components
 import '../widgets/top_bar.dart';
-import '../widgets/glassy_container.dart';
 import '../widgets/location_details_sheet.dart';
+import '../widgets/sidebar_widget.dart';
 
 // Models
 import '../models/location_model.dart';
@@ -21,19 +21,30 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen>
+    with SingleTickerProviderStateMixin {
   static const LatLng _center = LatLng(-27.5945, -48.4500);
   final ApiService _apiService = ApiService();
   final MapController _mapController = MapController();
-
-  bool _isSatellite = false;
+  late AnimationController _sidebarController;
   List<LocationModel> _allLocations = [];
   List<LocationModel> _visibleLocations = [];
+  bool _isLocating = false;
 
   @override
   void initState() {
     super.initState();
+    _sidebarController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
     _fetchStadiums();
+  }
+
+  @override
+  void dispose() {
+    _sidebarController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchStadiums() async {
@@ -62,30 +73,37 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _moveToCurrentLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+    setState(() => _isLocating = true);
+    try {
+      bool serviceEnabled;
+      LocationPermission permission;
 
-    // Check service
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return Future.error('Location services are disabled.');
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return Future.error('Location permissions are denied');
+      // Check service
+      serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        return Future.error('Location services are disabled.');
       }
-    }
 
-    if (permission == LocationPermission.deniedForever) {
-      return Future.error('Location permissions are permanently denied.');
-    }
+      permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          return Future.error('Location permissions are denied');
+        }
+      }
 
-    // Get location
-    final Position position = await Geolocator.getCurrentPosition();
-    _mapController.move(LatLng(position.latitude, position.longitude), 15.0);
+      if (permission == LocationPermission.deniedForever) {
+        return Future.error('Location permissions are permanently denied.');
+      }
+
+      // Get location
+      final Position position = await Geolocator.getCurrentPosition();
+      _mapController.move(LatLng(position.latitude, position.longitude), 15.0);
+    } catch (e) {
+      debugPrint('Location error: $e');
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
+    }
   }
 
   void _onMarkerTap(LocationModel location) {
@@ -112,12 +130,8 @@ class _MapScreenState extends State<MapScreen> {
             ),
             children: [
               TileLayer(
-                urlTemplate: _isSatellite
-                    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-                    : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-                subdomains: _isSatellite
-                    ? const ['a', 'b', 'c', 'd']
-                    : const [],
+                urlTemplate:
+                    'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
                 userAgentPackageName: 'com.example.app',
               ),
               MarkerLayer(
@@ -129,36 +143,11 @@ class _MapScreenState extends State<MapScreen> {
           ),
 
           // 2. Top Bar
-          const Positioned(top: 0, left: 0, right: 0, child: TopBar()),
-
-          // 3. Day/Night Switcher
           Positioned(
-            top: 100,
+            top: 0,
             left: 0,
             right: 0,
-            child: Center(
-              child: GlassyContainer(
-                borderRadius: 50,
-                padding: const EdgeInsets.all(4),
-                child: FittedBox(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildSwitchOption(
-                        'Dia',
-                        !_isSatellite,
-                        () => setState(() => _isSatellite = false),
-                      ),
-                      _buildSwitchOption(
-                        'Noite',
-                        _isSatellite,
-                        () => setState(() => _isSatellite = true),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            child: TopBar(onMenuTap: () => _sidebarController.forward()),
           ),
 
           // 5. Action Buttons
@@ -172,33 +161,19 @@ class _MapScreenState extends State<MapScreen> {
                   Icons.my_location,
                   size: 50,
                   onTap: _moveToCurrentLocation,
+                  isLoading: _isLocating,
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSwitchOption(String text, bool isActive, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive ? const Color(0xFF69F0AE) : Colors.transparent,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            color: isActive ? Colors.black87 : Colors.grey[600],
-            fontWeight: FontWeight.bold,
+          // 6. Sidebar (Highest z-index)
+          Positioned.fill(
+            child: SidebarWidget(
+              animationController: _sidebarController,
+              onClose: () => _sidebarController.reverse(),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -207,9 +182,10 @@ class _MapScreenState extends State<MapScreen> {
     IconData icon, {
     double size = 40,
     VoidCallback? onTap,
+    bool isLoading = false,
   }) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: isLoading ? null : onTap,
       child: Container(
         width: size,
         height: size,
@@ -224,7 +200,15 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ],
         ),
-        child: Icon(icon, color: Colors.black87, size: size * 0.5),
+        child: isLoading
+            ? Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: const CircularProgressIndicator(
+                  strokeWidth: 3,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black87),
+                ),
+              )
+            : Icon(icon, color: Colors.black87, size: size * 0.5),
       ),
     );
   }

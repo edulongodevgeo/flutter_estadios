@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class TopBar extends StatelessWidget {
-  const TopBar({super.key});
+  final VoidCallback? onMenuTap;
+
+  const TopBar({super.key, this.onMenuTap});
 
   @override
   Widget build(BuildContext context) {
@@ -12,7 +14,7 @@ class TopBar extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildCircleButton(Icons.menu),
+            _buildCircleButton(Icons.menu, onTap: onMenuTap),
             const SizedBox(width: 16), // Spacing between button and text
             Expanded(
               child: Text(
@@ -40,18 +42,25 @@ class TopBar extends StatelessWidget {
     );
   }
 
-  Widget _buildCircleButton(IconData icon) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
-        ],
+  Widget _buildCircleButton(IconData icon, {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 4,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Icon(icon, color: Colors.black87, size: 22),
       ),
-      child: Icon(icon, color: Colors.black87, size: 22),
     );
   }
 }
