@@ -26,6 +26,9 @@ jobs:
       - name: Build Flutter Web
         run: flutter build web --release --web-renderer canvaskit
 
+      - name: Copy vercel.json to build directory
+        run: cp vercel.json build/web/
+
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
